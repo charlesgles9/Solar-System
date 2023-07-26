@@ -141,10 +141,10 @@ window.onload = () => {
   }
   let world = Object.create(Square);
   world.edges = [];
-  world.w = ctx.canvas.width * 0.95;
-  world.h = ctx.canvas.height * 0.9;
-  world.x = ctx.canvas.width * 0.05;
-  world.y = ctx.canvas.height * 0.05;
+  world.w = ctx.canvas.width * 0.98;
+  world.h = ctx.canvas.height * 0.98;
+  world.x = ctx.canvas.width * 0.01;
+  world.y = ctx.canvas.height * 0.01;
   world.color = "transparent";
   world.createEdges();
   quads.push(world);
@@ -216,11 +216,13 @@ function drawQuads() {
     const size = quad.w * 1.0;
     const offset = size * 0.5;
     drawCircle(quad.color, quad.x + offset, quad.y + offset, size * 0.75);
-    ctx.strokeRect(quad.x, quad.y, quad.w, quad.h);
-    quad.edges.forEach((edge) => {
+
+    //ctx.strokeRect(quad.x, quad.y, quad.w, quad.h);
+    //@debug lines
+    /* quad.edges.forEach((edge) => {
       drawLine(edge.color, edge.sx, edge.sy, edge.stx, edge.sty);
       edge.color = "green";
-    });
+    });*/
   }
 }
 
@@ -423,6 +425,7 @@ function pointLight() {
       ctx.fill();
     }
   }
+
   /* let shadowGrad = ctx.createRadialGradient(
     light.x,
     light.y,
@@ -431,8 +434,8 @@ function pointLight() {
     light.y,
     700
   );
-  shadowGrad.addColorStop(0, "#000000");
-  shadowGrad.addColorStop(1, "#000000");
+  shadowGrad.addColorStop(0, "black");
+  shadowGrad.addColorStop(1, "black");
   let shadowRays = [];
 
   rays.forEach((ray) => {
@@ -447,13 +450,13 @@ function pointLight() {
   /*shadowRays.forEach((ray) => {
     drawLine("blue", ray.sx, ray.sy, ray.stx, ray.sty);
   });*/
-  /*s  shadowRays.push(shadowRays[0]);
+  /* shadowRays.push(shadowRays[0]);
   for (let i = 0; i < shadowRays.length - 1; i++) {
     let a = shadowRays[i];
     let b = shadowRays[i + 1];
     if (b.color == "white" && a.color == "white") continue;
     if (b.color == "red" && a.color == "red") continue;
-    ctx.fillStyle = shadowGrad;
+    ctx.fillStyle = "black";
     ctx.beginPath();
     ctx.moveTo(a.stx, a.sty);
     ctx.lineTo(b.stx, b.sty);
@@ -471,9 +474,11 @@ function pointLight() {
 function update() {
   if (ctx != null) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     pointLight();
     drawQuads();
     drawCircle(light.color, light.x, light.y, 20);
+    // update revolution around the light
     for (let i = 0; i < quads.length - 1; i++) {
       const quad = quads[i];
       const max =
