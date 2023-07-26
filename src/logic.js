@@ -129,15 +129,13 @@ window.onload = () => {
   ctx.canvas.width = window.innerWidth;
   ctx.canvas.height = window.innerHeight;
 
-  for (let i = 0; i < 3; i++) {
-    const quad = Object.create(Square);
-    quad.edges = [];
-    const size = 50 + 30 * Math.random();
-    quad.w = size;
-    quad.h = size;
-    quad.x = ctx.canvas.width * Math.random() * 0.7;
-    quad.y = ctx.canvas.height * Math.random() * 0.7;
-    quad.color = "brown";
+  for (let i = 0; i < 6; i++) {
+    const quad = createQuad(
+      ctx.canvas.width * 0.4 - i * 100,
+      ctx.canvas.height * Math.random() * 0.7,
+      40 + 30 * Math.random(),
+      "brown"
+    );
     quads.push(quad);
     quad.createEdges();
   }
@@ -154,6 +152,17 @@ window.onload = () => {
   light.y = ctx.canvas.height * 0.5;
   light.color = "yellow";
 };
+
+function createQuad(x, y, size, color) {
+  const quad = Object.create(Square);
+  quad.edges = [];
+  quad.w = size;
+  quad.h = size;
+  quad.x = x;
+  quad.y = y;
+  quad.color = color;
+  return quad;
+}
 
 //if au>0 they intersect
 function detect_line_collision(fx1, fy1, fx2, fy2, sx3, sy3, sx4, sy4) {
@@ -228,9 +237,9 @@ function rotatePoint(x, y, cx, cy, angle) {
   const sinAngle = Math.sin(angle);
   const dx = x - cx;
   const dy = y - cy;
-  const rotatedX = dx * cosAngle - dy * sinAngle + cx;
-  const rotatedY = dx * sinAngle + dy * cosAngle + cy;
-  return { x: rotatedX, y: rotatedY };
+  const rx = dx * cosAngle - dy * sinAngle + cx;
+  const ry = dx * sinAngle + dy * cosAngle + cy;
+  return { x: rx, y: ry };
 }
 
 function rayToQuadEdgeCollision(rays) {
@@ -368,7 +377,6 @@ function pointLight() {
   }*/
 
   rays.push(rays[0]);
-  let world = quads[quads.length - 1];
   grad = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, 700);
   grad.addColorStop(0, "#58c0dfaf");
   grad.addColorStop(1, "transparent");
