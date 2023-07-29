@@ -92,23 +92,22 @@ var objectPicker = {
   current: undefined,
   id: "",
 };
-const quads = [];
-var canvas = null;
-var ctx = null;
-var light = {};
+
+var rayLighter;
 let grad;
+var ctx = null;
 window.addEventListener("mousedown", (event) => {
-  for (let i = 0; i < quads.length; i++) {
-    let quad = quads[i];
+  for (let i = 0; i < rayLighter.quads.length; i++) {
+    let quad = rayLighter.quads[i];
     if (quad.contains(event.x, event.y, 20) && quad.id == "quad") {
       objectPicker.current = quad;
       objectPicker.id = quad.id;
     }
   }
-  const px = event.x - light.x;
-  const py = event.y - light.y;
+  const px = event.x - rayLighter.light.x;
+  const py = event.y - rayLighter.light.y;
   if (Math.sqrt(px * px + py * py) <= 30) {
-    objectPicker.current = light;
+    objectPicker.current = rayLighter.light;
     objectPicker.id = "light";
   }
 });
@@ -129,6 +128,9 @@ window.addEventListener("mouseup", (event) => {
 });
 
 window.onload = () => {
+  const quads = [];
+  var canvas = null;
+  var light = {};
   canvas = document.getElementById("canvas");
   ctx = canvas.getContext("2d");
   ctx.canvas.width = window.innerWidth;
@@ -158,7 +160,9 @@ window.onload = () => {
   light.x = ctx.canvas.width * 0.5;
   light.y = ctx.canvas.height * 0.5;
   light.size = 30;
+  light.illumination = 500;
   light.color = "yellow";
+  rayLighter = new RayLighter(quads, light);
 };
 
 function createQuad(x, y, size, color) {
@@ -196,6 +200,7 @@ function createLine(sx, sy, stx, sty) {
 
 function drawLine(color, sx, sy, stx, sty) {
   ctx.strokeStyle = color;
+  ctx.lineWidth = 5;
   ctx.beginPath();
   ctx.moveTo(sx, sy);
   ctx.lineTo(stx, sty);
@@ -216,7 +221,7 @@ function drawCircle(color, x, y, radius) {
   ctx.fill();
 }
 
-function drawQuads() {
+function drawQuads(quads) {
   for (let i = 0; i < quads.length; i++) {
     let quad = quads[i];
     quad.updateEdges();
@@ -227,10 +232,10 @@ function drawQuads() {
 
     //ctx.strokeRect(quad.x, quad.y, quad.w, quad.h);
     //@debug lines
-    quad.edges.forEach((edge) => {
+    /* quad.edges.forEach((edge) => {
       drawLine(edge.color, edge.sx, edge.sy, edge.stx, edge.sty);
       edge.color = "green";
-    });
+    });*/
   }
 }
 
@@ -271,17 +276,17 @@ function quadEdgeCollision(ray, quad) {
       ray.edge = quad;
       ray.stx = nsx;
       ray.sty = nsy;
-      ctx.strokeStyle = "orange";
+      /* ctx.strokeStyle = "orange";
       ctx.beginPath();
       ctx.arc(nsx, nsy, 2, 0, 2 * Math.PI);
       ctx.closePath();
-      ctx.stroke();
+      ctx.stroke();*/
       edge.color = "red";
       ray.color = quad.id != "world" ? "red" : "white";
     }
   });
 }
-function rayToQuadEdgeCollision(rays) {
+function rayToQuadEdgeCollision(rays, quads) {
   rays.forEach((ray) => {
     for (let i = 0; i < quads.length; i++) {
       let quad = quads[i];
@@ -290,7 +295,7 @@ function rayToQuadEdgeCollision(rays) {
   });
 }
 
-function LightRaysProjection() {
+function LightRaysProjection(quads, light) {
   let rays = [];
   for (let i = 0; i < quads.length; i++) {
     let quad = quads[i];
@@ -404,10 +409,10 @@ function LightRaysProjection() {
   return rays;
 }
 
-function pointLight() {
-  let rays = LightRaysProjection();
+function pointLight(quads, light) {
+  let rays = LightRaysProjection(quads, light);
   // first round of collision detection
-  rayToQuadEdgeCollision(rays);
+  rayToQuadEdgeCollision(rays, quads);
   //project the lines to the end of the world this helps us to cast shadows
   rays.forEach((ray) => {
     // remember the original values this will help us later in drawing the triangles
@@ -417,7 +422,7 @@ function pointLight() {
     ray.scale(50);
   });
   // second round of collision detection
-  rayToQuadEdgeCollision(rays);
+  rayToQuadEdgeCollision(rays, quads);
   /*rays.forEach((ray) => {
     drawLine(ray.color, ray.sx, ray.sy, ray.stx, ray.sty);
   });*/
@@ -433,23 +438,29 @@ function pointLight() {
   }*/
 
   rays.push(rays[0]);
-  grad = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, 700);
-  grad.addColorStop(0, "#58c0dfaf");
+  grad = ctx.createRadialGradient(
+    light.x,
+    light.y,
+    0,
+    light.x,
+    light.y,
+    light.illumination
+  );
+  grad.addColorStop(0, "#ffeb37af");
   grad.addColorStop(1, "black");
 
   /*rays.forEach((ray) => {
     drawLine(grad, ray.sx, ray.sy, ray.stx, ray.sty);
   });*/
+  ctx.fillStyle = grad;
 
   for (let i = 0; i < rays.length - 1; i++) {
     let a = rays[i];
     let b = rays[i + 1];
 
-    let color = "#58c0dfaf";
-    ctx.strokeStyle = `${color}`;
+    let color = "#58c0dfee";
+    // ctx.strokeStyle = grad;
 
-    ctx.fillStyle = grad;
-    ctx.lineWidth = 5;
     if (a.edge == b.edge) {
       ctx.beginPath();
       ctx.moveTo(a.sx, a.sy);
@@ -482,7 +493,7 @@ function pointLight() {
   }
 }
 
-function shadowCaster() {
+function shadowCaster(quads, light) {
   // sort the quads based on it's distance from the light source
   quads.sort((a, b) => {
     let d1 = a.distanceToPoint(light.x, light.y);
@@ -491,7 +502,7 @@ function shadowCaster() {
   });
 
   // cast a ray from the light source to the edge
-  let rays = LightRaysProjection();
+  let rays = LightRaysProjection(quads, light);
 
   // project the rays to the end of the world
   rays.forEach((ray) => {
@@ -533,7 +544,21 @@ function shadowCaster() {
         ctx.closePath();
         ctx.fill();
       }
-    drawQuad(quad.color, quad.x, quad.y, quad.w, quad.h);
+    if (quad.id == "quad")
+      drawQuad(
+        `rgba(${
+          255 *
+          Math.max(
+            0,
+            light.illumination / quad.distanceToPoint(light.x, light.y) / 5
+          )
+        },0,0,1)`,
+        quad.x,
+        quad.y,
+        quad.w,
+        quad.h
+      );
+    else drawQuad(quad.color, quad.x, quad.y, quad.w, quad.h);
   });
   /*quads.forEach((quad) => {
     quad.proj.forEach((ray) => {
@@ -541,33 +566,48 @@ function shadowCaster() {
     });
   });*/
 }
-function update() {
-  if (ctx != null) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    pointLight();
-    drawQuads();
-    shadowCaster();
 
-    drawCircle(light.color, light.x, light.y, 20);
+class RayLighter {
+  constructor(quads, light) {
+    this.quads = quads;
+    this.light = light;
+  }
+  update() {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.globalCompositeOperation = "lighter";
+    pointLight(this.quads, this.light);
+    ctx.globalCompositeOperation = "source-over";
+    drawQuads(this.quads);
+    shadowCaster(this.quads, this.light);
+    drawCircle(this.light.color, this.light.x, this.light.y, 20);
     // update revolution around the light
-    for (let i = 0; i < quads.length; i++) {
-      const quad = quads[i];
+    for (let i = 0; i < this.quads.length; i++) {
+      const quad = this.quads[i];
       if (quad.id == "world") continue;
       const max =
-        ((1000 - Math.sqrt((light.x + quad.x) ** 2 + (light.y + quad.y) ** 2)) /
+        ((1000 -
+          Math.sqrt(
+            (this.light.x + quad.x) ** 2 + (this.light.y + quad.y) ** 2
+          )) /
           1000) *
         0.02;
       const point = rotatePoint(
         quad.x,
         quad.y,
-        light.x + light.size * 0.5,
-        light.y + light.size * 0.5,
+        this.light.x + this.light.size * 0.5,
+        this.light.y + this.light.size * 0.5,
         max
       );
       quad.x = point.x;
       quad.y = point.y;
       quad.updateEdges();
     }
+  }
+}
+
+function update() {
+  if (rayLighter != null) {
+    rayLighter.update();
   }
   requestAnimationFrame(update);
 }
