@@ -60,6 +60,11 @@ var Square = {
     let len = Math.sqrt(px * px + py * py);
     return len < this.w + size;
   },
+  distanceToPoint(px, py) {
+    let dx = this.x - px;
+    let dy = this.y - py;
+    return Math.sqrt(dx ** 2 + dy ** 2);
+  },
   updateEdges() {
     //top face
     this.edges[0].set(this.x, this.y, this.x + this.w, this.y);
@@ -93,11 +98,11 @@ var ctx = null;
 var light = {};
 let grad;
 window.addEventListener("mousedown", (event) => {
-  for (let i = 0; i < quads.length - 1; i++) {
+  for (let i = 0; i < quads.length; i++) {
     let quad = quads[i];
-    if (quad.contains(event.x, event.y, 20)) {
+    if (quad.contains(event.x, event.y, 20) && quad.id == "quad") {
       objectPicker.current = quad;
-      objectPicker.id = "quad";
+      objectPicker.id = quad.id;
     }
   }
   const px = event.x - light.x;
@@ -136,6 +141,7 @@ window.onload = () => {
       40 + 30 * Math.random(),
       "brown"
     );
+    quad.id = "quad";
     quads.push(quad);
     quad.createEdges();
   }
@@ -147,6 +153,7 @@ window.onload = () => {
   world.y = ctx.canvas.height * 0.01;
   world.color = "transparent";
   world.createEdges();
+  world.id = "world";
   quads.push(world);
   light.x = ctx.canvas.width * 0.5;
   light.y = ctx.canvas.height * 0.5;
@@ -215,14 +222,14 @@ function drawQuads() {
     ctx.strokeStyle = "red";
     const size = quad.w * 1.0;
     const offset = size * 0.5;
-    drawCircle(quad.color, quad.x + offset, quad.y + offset, size * 0.75);
+    //drawCircle(quad.color, quad.x + offset, quad.y + offset, size * 0.75);
 
     //ctx.strokeRect(quad.x, quad.y, quad.w, quad.h);
     //@debug lines
-    /* quad.edges.forEach((edge) => {
+    quad.edges.forEach((edge) => {
       drawLine(edge.color, edge.sx, edge.sy, edge.stx, edge.sty);
       edge.color = "green";
-    });*/
+    });
   }
 }
 
@@ -244,52 +251,51 @@ function rotatePoint(x, y, cx, cy, angle) {
   return { x: rx, y: ry };
 }
 
+function quadEdgeCollision(ray, quad) {
+  quad.edges.forEach((edge) => {
+    let d = detect_line_collision(
+      ray.sx,
+      ray.sy,
+      ray.stx,
+      ray.sty,
+      edge.sx,
+      edge.sy,
+      edge.stx,
+      edge.sty
+    );
+
+    if (d > 0.0 && (quad.parent == undefined || !quad.parent.includes(edge))) {
+      let nsx = ray.sx + d * (ray.stx - ray.sx);
+      let nsy = ray.sy + d * (ray.sty - ray.sy);
+      ray.edge = quad;
+      ray.stx = nsx;
+      ray.sty = nsy;
+      ctx.strokeStyle = "orange";
+      ctx.beginPath();
+      ctx.arc(nsx, nsy, 2, 0, 2 * Math.PI);
+      ctx.closePath();
+      ctx.stroke();
+      edge.color = "red";
+      ray.color = quad.id != "world" ? "red" : "white";
+    }
+  });
+}
 function rayToQuadEdgeCollision(rays) {
   rays.forEach((ray) => {
     for (let i = 0; i < quads.length; i++) {
       let quad = quads[i];
-      let world = quads[quads.length - 1];
-      quad.edges.forEach((edge) => {
-        let d = detect_line_collision(
-          ray.sx,
-          ray.sy,
-          ray.stx,
-          ray.sty,
-          edge.sx,
-          edge.sy,
-          edge.stx,
-          edge.sty
-        );
-
-        if (
-          d > 0.0 &&
-          (quad.parent == undefined || !quad.parent.includes(edge))
-        ) {
-          let nsx = ray.sx + d * (ray.stx - ray.sx);
-          let nsy = ray.sy + d * (ray.sty - ray.sy);
-          ray.edge = quad;
-          ray.stx = nsx;
-          ray.sty = nsy;
-          ctx.strokeStyle = "orange";
-          ctx.beginPath();
-          ctx.arc(nsx, nsy, 2, 0, 2 * Math.PI);
-          ctx.closePath();
-          ctx.stroke();
-          edge.color = "red";
-          ray.color = quad != world ? "red" : "white";
-        }
-      });
+      quadEdgeCollision(ray, quad);
     }
   });
 }
 
-function pointLight() {
+function LightRaysProjection() {
   let rays = [];
   for (let i = 0; i < quads.length; i++) {
     let quad = quads[i];
-    let world = quads[quads.length - 1];
+
     let arr = [];
-    if (quad != world) {
+    if (quad.id != "world") {
       arr.push(
         createLine(
           light.x,
@@ -340,6 +346,7 @@ function pointLight() {
               0.1
         )
       );
+      quad.proj = arr;
     } else {
       arr.push(
         createLine(light.x, light.y, quad.edges[0].stx, quad.edges[0].sty),
@@ -347,11 +354,16 @@ function pointLight() {
         createLine(light.x, light.y, quad.edges[2].stx, quad.edges[2].sty),
         createLine(light.x, light.y, quad.edges[0].sx, quad.edges[0].sy)
       );
+      quad.proj = arr;
     }
 
     rays.push(...arr);
   }
+  return rays;
+}
 
+function pointLight() {
+  let rays = LightRaysProjection();
   // first round of collision detection
   rayToQuadEdgeCollision(rays);
   //project the lines to the end of the world this helps us to cast shadows
@@ -471,15 +483,72 @@ function pointLight() {
     ctx.fill();
   }*/
 }
+
+function shadowCaster() {
+  // sort the quads based on it's distance from the light source
+  quads.sort((a, b) => {
+    let d1 = a.distanceToPoint(light.x, light.y);
+    let d2 = b.distanceToPoint(light.x, light.y);
+    return d1 < d2 ? 1 : -1;
+  });
+
+  // cast a ray from the light source to the edge
+  let rays = LightRaysProjection();
+
+  // project the rays to the end of the world
+  rays.forEach((ray) => {
+    // shadows are drawn from the starting edge
+    ray.ox = ray.stx;
+    ray.oy = ray.sty;
+    ray.color = ray.color;
+    ray.scale(50);
+  });
+  quads.forEach((quad) => {
+    let proj = quad.proj;
+    proj.forEach((ray) => {
+      quadEdgeCollision(ray, quad);
+    });
+  });
+  quads.forEach((quad) => {
+    let proj = quad.proj;
+    proj = proj.filter((p) => p.color != "red");
+    if (quad.id == "quad")
+      for (let i = 0; i < proj.length - 1; i++) {
+        let a = proj[i];
+        let b = proj[i + 1];
+
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        ctx.moveTo(a.stx, a.sty);
+        ctx.lineTo(b.stx, b.sty);
+        ctx.lineTo(a.ox, a.oy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(b.stx, b.sty);
+        ctx.lineTo(a.ox, a.oy);
+        ctx.lineTo(b.ox, b.oy);
+        ctx.closePath();
+        ctx.fill();
+      }
+  });
+  quads.forEach((quad) => {
+    quad.proj.forEach((ray) => {
+      drawLine(ray.color, ray.ox, ray.oy, ray.stx, ray.sty);
+    });
+  });
+}
 function update() {
   if (ctx != null) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    pointLight();
+    // pointLight();
     drawQuads();
+    shadowCaster();
+
     drawCircle(light.color, light.x, light.y, 20);
     // update revolution around the light
-    for (let i = 0; i < quads.length - 1; i++) {
+    /* for (let i = 0; i < quads.length - 1; i++) {
       const quad = quads[i];
       const max =
         ((1000 - Math.sqrt((light.x + quad.x) ** 2 + (light.y + quad.y) ** 2)) /
@@ -489,7 +558,7 @@ function update() {
       quad.x = point.x;
       quad.y = point.y;
       quad.updateEdges();
-    }
+    }*/
   }
   requestAnimationFrame(update);
 }
